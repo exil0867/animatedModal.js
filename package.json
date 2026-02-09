@@ -10,16 +10,8 @@
   },
   "author": "João Pereira",
   "license": "MIT",
-  "scripts": {
-    "test": "vitest run"
-  },
   "bugs": {
     "url": "https://github.com/joaopereirawd/animatedModal.js/issues"
   },
-  "homepage": "https://github.com/joaopereirawd/animatedModal.js#readme",
-  "devDependencies": {
-    "jquery": "^3.7.1",
-    "jsdom": "^25.0.1",
-    "vitest": "^2.1.4"
-  }
+  "homepage": "https://github.com/joaopereirawd/animatedModal.js#readme"
 }

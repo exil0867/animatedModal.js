@@ -1,0 +1,55 @@
+:root {
+  --am-duration: 0.2s;
+  --am-easing: ease;
+  --am-background: #000;
+  --am-overlay-opacity: 0.8;
+  --am-z-index: 9999;
+  --am-z-index-hidden: -9999;
+}
+
+.animated-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: var(--am-z-index-hidden);
+  transition: opacity var(--am-duration) var(--am-easing),
+    visibility 0s linear var(--am-duration);
+}
+
+.animated-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--am-background);
+  opacity: var(--am-overlay-opacity);
+}
+
+.animated-modal__content {
+  position: relative;
+  z-index: 1;
+}
+
+.animated-modal.am-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: var(--am-z-index);
+  transition: opacity var(--am-duration) var(--am-easing);
+}
+
+.animated-modal.am-animating {
+  transition: opacity var(--am-duration) var(--am-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animated-modal,
+  .animated-modal.am-open,
+  .animated-modal.am-animating {
+    transition: none;
+  }
+}

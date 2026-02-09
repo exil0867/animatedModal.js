@@ -1,0 +1,63 @@
+:root {
+  --animated-modal-background: #111111;
+  --animated-modal-color: #ffffff;
+  --animated-modal-duration: 200ms;
+  --animated-modal-easing: ease;
+  --animated-modal-padding: clamp(1.5rem, 3vw, 3rem);
+}
+
+.animated-modal {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--animated-modal-background);
+  color: var(--animated-modal-color);
+  padding: var(--animated-modal-padding);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--animated-modal-duration) var(--animated-modal-easing);
+  z-index: -1;
+}
+
+.animated-modal--on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.animated-modal--off {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.animated {
+  animation-duration: var(--animated-modal-duration);
+  animation-fill-mode: both;
+}
+
+.fadeIn {
+  animation-name: animatedModalFadeIn;
+}
+
+.fadeOut {
+  animation-name: animatedModalFadeOut;
+}
+
+@keyframes animatedModalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes animatedModalFadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}

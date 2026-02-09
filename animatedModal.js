@@ -7,6 +7,20 @@
 =========================================*/
 
 (function($) {
+  var animatedModalManager = {
+    activeModal: null,
+    activeSettings: null,
+    setActive: function(modal, settings) {
+      this.activeModal = modal;
+      this.activeSettings = settings;
+    },
+    clearActive: function(modal) {
+      if (this.activeModal && this.activeModal[0] === modal[0]) {
+        this.activeModal = null;
+        this.activeSettings = null;
+      }
+    }
+  };
 
   $.fn.animatedModal = function(options) {
     var modal = $(this);
@@ -82,21 +96,116 @@
     //Apply stles
     id.css(initStyles);
 
+    function getAnimationDurationMs(duration) {
+      if (!duration) {
+        return 0;
+      }
+      if (typeof duration === 'number') {
+        return duration;
+      }
+      if (duration.indexOf('ms') > -1) {
+        return parseFloat(duration);
+      }
+      if (duration.indexOf('s') > -1) {
+        return parseFloat(duration) * 1000;
+      }
+      return parseFloat(duration);
+    }
+
+    function applyAnimationDuration(target, duration) {
+      target.css({
+        '-webkit-animation-duration': duration,
+        '-moz-animation-duration': duration,
+        '-ms-animation-duration': duration,
+        'animation-duration': duration
+      });
+    }
+
+    function waitForAnimation(target, duration) {
+      var deferred = $.Deferred();
+      var durationMs = getAnimationDurationMs(duration);
+      var resolved = false;
+      var resolveOnce = function() {
+        if (resolved) {
+          return;
+        }
+        resolved = true;
+        deferred.resolve();
+      };
+      var timeoutId = setTimeout(resolveOnce, durationMs + 50);
+      target.one('webkitAnimationEnd.animatedModal mozAnimationEnd.animatedModal MSAnimationEnd.animatedModal oanimationend.animatedModal animationend.animatedModal', function() {
+        clearTimeout(timeoutId);
+        resolveOnce();
+      });
+      if (durationMs === 0) {
+        clearTimeout(timeoutId);
+        setTimeout(resolveOnce, 0);
+      }
+      return deferred.promise();
+    }
+
+    function openModal() {
+      var deferred = $.Deferred();
+      applyAnimationDuration(id, settings.animationDuration);
+      if (id.hasClass(settings.modalTarget + '-off')) {
+        id.removeClass(settings.animatedOut);
+        id.removeClass(settings.modalTarget + '-off');
+        id.addClass(settings.modalTarget + '-on');
+      }
+
+      if (id.hasClass(settings.modalTarget + '-on')) {
+        settings.beforeOpen();
+        id.css({ 'opacity': settings.opacityIn, 'z-index': settings.zIndexIn });
+        id.addClass(settings.animatedIn);
+        waitForAnimation(id, settings.animationDuration).then(function() {
+          afterOpen();
+          animatedModalManager.setActive(id, settings);
+          deferred.resolve();
+        });
+      } else {
+        deferred.resolve();
+      }
+      return deferred.promise();
+    }
+
+    function closeModal(target, targetSettings, options) {
+      var deferred = $.Deferred();
+      var duration = targetSettings.animationDuration;
+      var isFast = options && options.fast;
+      if (isFast) {
+        duration = '0s';
+      }
+      applyAnimationDuration(target, duration);
+      targetSettings.beforeClose(); //beforeClose
+      if (target.hasClass(targetSettings.modalTarget + '-on')) {
+        target.removeClass(targetSettings.modalTarget + '-on');
+        target.addClass(targetSettings.modalTarget + '-off');
+      }
+
+      if (target.hasClass(targetSettings.modalTarget + '-off')) {
+        target.removeClass(targetSettings.animatedIn);
+        target.addClass(targetSettings.animatedOut);
+        waitForAnimation(target, duration).then(function() {
+          afterClose(target, targetSettings);
+          applyAnimationDuration(target, targetSettings.animationDuration);
+          deferred.resolve();
+        });
+      } else {
+        afterClose(target, targetSettings);
+        applyAnimationDuration(target, targetSettings.animationDuration);
+        deferred.resolve();
+      }
+      return deferred.promise();
+    }
+
     modal.click(function(event) {
       event.preventDefault();
       if (href == idConc) {
-        if (id.hasClass(settings.modalTarget + '-off')) {
-          id.removeClass(settings.animatedOut);
-          id.removeClass(settings.modalTarget + '-off');
-          id.addClass(settings.modalTarget + '-on');
+        var sequence = $.Deferred().resolve().promise();
+        if (animatedModalManager.activeModal && animatedModalManager.activeSettings && animatedModalManager.activeModal[0] !== id[0]) {
+          sequence = closeModal(animatedModalManager.activeModal, animatedModalManager.activeSettings, { fast: true });
         }
-
-        if (id.hasClass(settings.modalTarget + '-on')) {
-          settings.beforeOpen();
-          id.css({ 'opacity': settings.opacityIn, 'z-index': settings.zIndexIn });
-          id.addClass(settings.animatedIn);
-          id.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', afterOpen);
-        };
+        sequence.then(openModal);
       }
     });
 
@@ -104,24 +213,13 @@
 
     closeBt.click(function(event) {
       event.preventDefault();
-
-      settings.beforeClose(); //beforeClose
-      if (id.hasClass(settings.modalTarget + '-on')) {
-        id.removeClass(settings.modalTarget + '-on');
-        id.addClass(settings.modalTarget + '-off');
-      }
-
-      if (id.hasClass(settings.modalTarget + '-off')) {
-        id.removeClass(settings.animatedIn);
-        id.addClass(settings.animatedOut);
-        id.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', afterClose);
-      };
-
+      closeModal(id, settings);
     });
 
-    function afterClose() {
-      id.css({ 'opacity': settings.opacityOut, 'z-index': settings.zIndexOut });
-      settings.afterClose(); //afterClose
+    function afterClose(target, targetSettings) {
+      target.css({ 'opacity': targetSettings.opacityOut, 'z-index': targetSettings.zIndexOut });
+      targetSettings.afterClose(); //afterClose
+      animatedModalManager.clearActive(target);
     }
 
     function afterOpen() {

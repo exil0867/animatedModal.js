@@ -27,6 +27,10 @@
     var modalTarget = modal.attr('href').replace('#', '');
     // Defaults
     var closeBt = $('#' + modalTarget).find('[data-modal-close]');
+    var lastFocusedElement = null;
+    var focusTrapHandler = null;
+    var escapeHandler = null;
+    var overlayEl = null;
     function getScrollBarWidth() {
       var $outer = $('<div>').css({ visibility: 'hidden', width: 100, overflow: 'scroll' }).appendTo('body'),
         widthWithScroll = $('<div>').css({ width: '100%' }).appendTo($outer).outerWidth();
@@ -47,6 +51,15 @@
       animatedIn: 'fadeIn',
       animatedOut: 'fadeOut',
       animationDuration: '.2s',
+      overlay: true,
+      overlayClass: 'animated-modal-overlay',
+      overlayZIndex: '9998',
+      overlayOpacity: '0.6',
+      overlayColor: '#000',
+      escapeClose: true,
+      ariaRole: 'dialog',
+      ariaLabelledBy: null,
+      ariaDescribedBy: null,
       // Callbacks
       beforeOpen: function() {
         $('html').css('overflowY', 'scroll');
@@ -78,6 +91,17 @@
     // Default Classes
     id.addClass('animated');
     id.addClass(settings.modalTarget + '-off');
+    id.attr('aria-hidden', 'true');
+    if (settings.ariaRole) {
+      id.attr('role', settings.ariaRole);
+    }
+    id.attr('aria-modal', 'true');
+    if (settings.ariaLabelledBy) {
+      id.attr('aria-labelledby', settings.ariaLabelledBy);
+    }
+    if (settings.ariaDescribedBy) {
+      id.attr('aria-describedby', settings.ariaDescribedBy);
+    }
 
     //Init styles
     var initStyles = {
@@ -144,6 +168,118 @@
       return deferred.promise();
     }
 
+    function ensureOverlay() {
+      if (!settings.overlay) {
+        return;
+      }
+      if (overlayEl && overlayEl.length) {
+        return;
+      }
+      overlayEl = $('<div>')
+        .addClass(settings.overlayClass)
+        .attr('data-animated-modal-overlay', settings.modalTarget)
+        .css({
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: settings.overlayColor,
+          opacity: settings.overlayOpacity,
+          'z-index': settings.overlayZIndex
+        })
+        .appendTo('body');
+    }
+
+    function removeOverlay() {
+      if (overlayEl && overlayEl.length) {
+        overlayEl.remove();
+      }
+      overlayEl = null;
+    }
+
+    function getFocusableElements(target) {
+      return target
+        .find('a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex]:not([tabindex="-1"]), [contenteditable]')
+        .filter(function() {
+          return $(this).attr('tabindex') !== '-1';
+        });
+    }
+
+    function trapFocus() {
+      if (focusTrapHandler) {
+        return;
+      }
+      focusTrapHandler = function(event) {
+        if (event.key !== 'Tab') {
+          return;
+        }
+        var focusable = getFocusableElements(id);
+        if (!focusable.length) {
+          event.preventDefault();
+          id.focus();
+          return;
+        }
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+          return;
+        }
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      };
+      $(document).on('keydown.animatedModalFocus', focusTrapHandler);
+    }
+
+    function releaseFocusTrap() {
+      if (focusTrapHandler) {
+        $(document).off('keydown.animatedModalFocus', focusTrapHandler);
+      }
+      focusTrapHandler = null;
+    }
+
+    function enableEscapeClose() {
+      if (!settings.escapeClose || escapeHandler) {
+        return;
+      }
+      escapeHandler = function(event) {
+        if (event.key === 'Escape' || event.keyCode === 27) {
+          closeModal(id, settings);
+        }
+      };
+      $(document).on('keydown.animatedModalEscape', escapeHandler);
+    }
+
+    function disableEscapeClose() {
+      if (escapeHandler) {
+        $(document).off('keydown.animatedModalEscape', escapeHandler);
+      }
+      escapeHandler = null;
+    }
+
+    function restoreFocus() {
+      if (lastFocusedElement && lastFocusedElement.focus) {
+        lastFocusedElement.focus();
+      }
+      lastFocusedElement = null;
+    }
+
+    function moveFocusToModal() {
+      var focusable = getFocusableElements(id);
+      if (focusable.length) {
+        focusable.first().focus();
+      } else {
+        if (!id.attr('tabindex')) {
+          id.attr('tabindex', '-1');
+        }
+        id.focus();
+      }
+    }
+
     function openModal() {
       var deferred = $.Deferred();
       applyAnimationDuration(id, settings.animationDuration);
@@ -155,10 +291,16 @@
 
       if (id.hasClass(settings.modalTarget + '-on')) {
         settings.beforeOpen();
+        lastFocusedElement = document.activeElement;
+        id.attr('aria-hidden', 'false');
+        ensureOverlay();
+        enableEscapeClose();
+        trapFocus();
         id.css({ 'opacity': settings.opacityIn, 'z-index': settings.zIndexIn });
         id.addClass(settings.animatedIn);
         waitForAnimation(id, settings.animationDuration).then(function() {
           afterOpen();
+          moveFocusToModal();
           animatedModalManager.setActive(id, settings);
           deferred.resolve();
         });
@@ -217,9 +359,14 @@
     });
 
     function afterClose(target, targetSettings) {
+      target.attr('aria-hidden', 'true');
       target.css({ 'opacity': targetSettings.opacityOut, 'z-index': targetSettings.zIndexOut });
       targetSettings.afterClose(); //afterClose
       animatedModalManager.clearActive(target);
+      disableEscapeClose();
+      releaseFocusTrap();
+      removeOverlay();
+      restoreFocus();
     }
 
     function afterOpen() {
